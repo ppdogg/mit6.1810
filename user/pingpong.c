@@ -16,7 +16,6 @@ int main(int argc, char *argv[]) {
         write(p2[1], "pong\0", 5);
     } else {
         mypid = getpid();
-        // close(p1[0]);
         write(p1[1], "ping\0", 5);
         read(p2[0], msg, 5);
         printf("%d: received %s\n", mypid, msg);
