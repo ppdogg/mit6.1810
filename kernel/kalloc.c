@@ -80,3 +80,26 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
+// Return bytes of free memory.
+// Return -1 if can not get pointer of freelist.
+uint64
+kfreemem(void) {
+  int res;
+  struct run *r;
+
+  acquire(&kmem.lock);
+  r = kmem.freelist;
+  release(&kmem.lock);
+
+  if (!r) {
+    return 0;
+  }
+
+  res = 0;
+  while (r) {
+    res += PGSIZE;
+    r = r->next;
+  }
+  return res;
+}
