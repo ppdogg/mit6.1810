@@ -295,6 +295,8 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+  // Copy traced syscall from parent to child.
+  np->tracesyscall = p->tracesyscall;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
