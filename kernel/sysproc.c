@@ -75,6 +75,34 @@ int
 sys_pgaccess(void)
 {
   // lab pgtbl: your code here.
+  uint64 va, maskaddr;
+  int n;
+  uint32 bitmask;
+
+  argaddr(0, &va);
+  argint(1, &n);
+  argaddr(2, &maskaddr);
+
+  // virtual address illegal.
+  if (va > MAXVA) {
+    return -1;
+  }
+
+  bitmask = 0;
+  for (int i = 0; i < n && va < MAXVA; i++, va += PGSIZE) {
+    pte_t *pte = walk(myproc()->pagetable, va, 0);
+    if (pte == 0 || (*pte & (PTE_U | PTE_V)) == 0) {
+      continue;
+    }
+    if (*pte & PTE_A) {
+      bitmask |= 1 << i;
+      *pte &= ~PTE_A;
+    }
+  }
+
+  if (copyout(myproc()->pagetable, maskaddr, (char *)&bitmask, sizeof(uint32)) <
+      0)
+    return -1;
   return 0;
 }
 #endif
