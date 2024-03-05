@@ -77,9 +77,34 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+  if(which_dev == 2) {
+    if (p->interval > 0) {
+      p->ticks++;
+      if (p->ticks > p->interval && p->interrupted == 0) {
+        p->interrupted = 1;
+        p->ticks = 0;
+        // save register
+        p->savedstate->ra = p->trapframe->ra;
+        p->savedstate->sp = p->trapframe->sp;
+        p->savedstate->t1 = p->trapframe->t1;
+        p->savedstate->s0 = p->trapframe->s0;
+        p->savedstate->s1 = p->trapframe->s1;
+        p->savedstate->a0 = p->trapframe->a0;
+        p->savedstate->a1 = p->trapframe->a1;
+        p->savedstate->a4 = p->trapframe->a4;
+        p->savedstate->a5 = p->trapframe->a5;
+        p->savedstate->s2 = p->trapframe->s2;
+        p->savedstate->s3 = p->trapframe->s3;
+        p->savedstate->s4 = p->trapframe->s4;
+        p->savedstate->s5 = p->trapframe->s5;
 
+        p->savedstate->epc = p->trapframe->epc;
+        // call alarm handler
+        p->trapframe->epc = (uint64)p->alarmhandler;
+      }
+    }
+    yield();
+  }
   usertrapret();
 }
 
