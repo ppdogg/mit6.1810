@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -145,6 +146,11 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  for (int i =0; i<VMASIZE; i++) {
+    p->vma[i].valid = 0;
+    p->vma[i].alloc = 0;
+  }
 
   return p;
 }
@@ -296,6 +302,15 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // Copy mapped regions from parent to child.
+  for (i=0; i<VMASIZE; i++) {
+    np->vma[i].valid = 0;
+    if (p->vma[i].valid) {
+      memmove(&np->vma[i], &p->vma[i], sizeof(struct vmarea));
+      filedup(p->vma[i].f);
+    }
+  }
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -347,9 +362,28 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
+  int i;
+  pte_t* pte;
 
   if(p == initproc)
     panic("init exiting");
+
+  // Close all mapped regions
+  for (i = 0; i < VMASIZE; i++) {
+    if (p->vma[i].valid == 1) {
+      if (myproc()->vma[i].valid && (myproc()->vma[i].flags & MAP_SHARED)) {
+        filewrite(myproc()->vma[i].f, myproc()->vma[i].va,
+                  myproc()->vma[i].len);
+      }
+      if ((pte = walk(myproc()->pagetable, myproc()->vma[i].va, 0)) > 0 &&
+          (*pte & PTE_V) != 0) {
+        uvmunmap(myproc()->pagetable, myproc()->vma[i].va,
+                 myproc()->vma[i].len / PGSIZE, 1);
+      }
+      fileclose(myproc()->vma[i].f);
+      p->vma[i].valid = 0;
+    }
+  }
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){

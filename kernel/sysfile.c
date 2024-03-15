@@ -503,3 +503,95 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void)
+{
+  struct file* f;
+  int len, prot, flags, off;
+  int i;
+
+  if (argfd(4, 0, &f) < 0)
+    return -1;
+
+  argint(1, &len);
+  len = PGROUNDUP(len);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(5, &off);
+
+  if (!f->readable && (prot & PROT_READ))
+    return -1;
+  if (!f->writable && !(flags & MAP_PRIVATE) && (prot & PROT_WRITE))
+    return -1;
+
+  // find an unused virtual memory area
+  for (i = 0; i < VMASIZE; i++) {
+    if (myproc()->vma[i].valid == 0) {
+      break;
+    }
+  }
+  if (i == VMASIZE) {
+    return -1;
+  }
+
+  // allocate virtual memory area
+  myproc()->vma[i].f = f;
+  myproc()->vma[i].len = len;
+  myproc()->vma[i].prot = prot;
+  myproc()->vma[i].flags = flags;
+  myproc()->vma[i].off = off;
+  myproc()->vma[i].va = myproc()->sz;
+  myproc()->vma[i].valid = 1;
+
+  myproc()->sz += len;
+  filedup(f);
+
+  return myproc()->vma[i].va;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 va;
+  int len, i;
+  pte_t* pte;
+
+  argaddr(0, &va);
+  argint(1, &len);
+
+  for (i = 0; i < VMASIZE; i++) {
+    if (myproc()->vma[i].valid == 1 && myproc()->vma[i].va <= va &&
+        va < myproc()->vma[i].va + myproc()->vma[i].len) {
+      break;
+    }
+  }
+  if (i == VMASIZE) {
+    return -1;
+  }
+
+  va = PGROUNDDOWN(va);
+  len = PGROUNDUP(len);
+  if (myproc()->vma[i].flags & MAP_SHARED) {
+    filewrite(myproc()->vma[i].f, va, len);
+  }
+
+  if ((pte = walk(myproc()->pagetable, va, 0)) > 0 && (*pte & PTE_V) != 0) {
+    uvmunmap(myproc()->pagetable, va, len / PGSIZE, 1);
+  }
+
+  if (va == myproc()->vma[i].va && len == myproc()->vma[i].len) {
+    fileclose(myproc()->vma[i].f);
+    myproc()->vma[i].valid = 0;
+  } else if (va == myproc()->vma[i].va) {
+    myproc()->vma[i].len -= len;
+    myproc()->vma[i].va += len;
+    myproc()->vma[i].off += len;
+  } else if ((va + len) == (myproc()->vma[i].va + myproc()->vma[i].len)) {
+    myproc()->vma[i].len -= len;
+  } else {
+    return -1;
+  }
+
+  return 0;
+}
