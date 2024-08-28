@@ -25,3 +25,12 @@ barrier
 .DS_Store
 *.dSYM
 *.pcap
+
+.clang-format
+.vscode
+.gitignore
+time.txt
+answers-syscall.txt
+answers-pgtbl.txt
+answers-traps.txt
+answers-thread.txt
